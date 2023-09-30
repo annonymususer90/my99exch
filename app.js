@@ -4,7 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const puppeteer = require('puppeteer');
 const { infoAsync, errorAsync, warnAsync, isValidAmount } = require('./apputils');
-const { login, register, lockUser, deposit, withdraw, changePass } = require('./browse');
+const { login, register, lockUser, deposit, withdraw, resetPass } = require('./browse');
 
 require('dotenv').config();
 
@@ -138,13 +138,17 @@ app.post('/register', async (req, res) => {
     }
 });
 
-app.post('/changepass', async (req, res) => {
+app.post('/resetpass', async (req, res) => {
     const page = await b.newPage();
-    const { url, username, pass } = req.body;
+    const { url, username } = req.body;
 
     try {
-        const result = await changePass(page, url, username, pass);
-        res.json({ message: 'Password Change successful', result });
+        const result = await resetPass(page, url, username);
+        if (result.success) {
+            res.json({ message: result.message });
+        } else {
+            res.status(400).json({ message: result.message });
+        }
     } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
         errorAsync(error.message);
@@ -154,7 +158,7 @@ app.post('/changepass', async (req, res) => {
 });
 
 app.post('/deposit', async (req, res) => {
-    const { url, username, amount, tCode } = req.body;
+    const { url, username, amount } = req.body;
     const page = await b.newPage();
     try {
         if (!isValidAmount(amount)) {
@@ -164,7 +168,7 @@ app.post('/deposit', async (req, res) => {
 
         infoAsync(`[req] ${url}, user: ${username}, amount: ${amount}`);
         const startTime = new Date();
-        const result = await deposit(page, url, username, amount, tCode);
+        const result = await deposit(page, url, username, amount);
         const endTime = new Date();
         responseTime = endTime - startTime;
         if (result.success == false) {
@@ -183,7 +187,7 @@ app.post('/deposit', async (req, res) => {
 });
 
 app.post('/withdraw', async (req, res) => {
-    const { url, username, amount, tCode } = req.body;
+    const { url, username, amount } = req.body;
     const page = await b.newPage();
 
     try {
@@ -194,7 +198,7 @@ app.post('/withdraw', async (req, res) => {
 
         infoAsync(`[req] ${url}, user: ${username}, amount: ${amount}`);
         const startTime = new Date();
-        const result = await withdraw(page, url, username, amount, tCode);
+        const result = await withdraw(page, url, username, amount);
         const endTime = new Date();
         const responseTime = endTime - startTime;
         if (result.success == false) {
@@ -213,12 +217,15 @@ app.post('/withdraw', async (req, res) => {
 });
 
 app.post('/lockuser', async (req, res) => {
-    const { url, username, tCode } = req.body;
+    const { url, username } = req.body;
     const page = await b.newPage();
 
     try {
-        const result = await lockUser(page, url, username, tCode);
-        res.json({ message: 'User locked successfully', result });
+        const result = await lockUser(page, url, username);
+        if (result.success)
+            res.status(200).json({ message: 'User locked successfully', result });
+        else
+            res.status(400).json({ message: result.message });
     } catch (err) {
         res.status(500).json({ error: 'Internal server error' });
         errorAsync(err.message);
