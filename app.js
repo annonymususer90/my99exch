@@ -9,12 +9,12 @@ const { login, register, lockUser, deposit, withdraw, changePass } = require('./
 require('dotenv').config();
 
 const app = express();
-const PORT = 80;
+const PORT = 3000;
 const bodyParser = require('body-parser');
 const loginCache = new Map();
 const allowedDomains = ['http://fgpunt.com', 'https://fgpunt.com'];
 const corsOptions = {
-    origin: allowedDomains,
+    origin: null,
     methods: 'POST, GET',
     credentials: false,
     optionsSuccessStatus: 204
@@ -35,9 +35,9 @@ var b;
             process.env.NODE_ENV === "production"
                 ? process.env.PUPPETEER_EXECUTABLE_PATH
                 : puppeteer.executablePath(),
-        headless: true,
+        headless: false,
         timeout: 120000,
-        defaultViewport: { width: 1300, height: 800 },
+        defaultViewport: { width: 1366, height: 768 },
     });
 })();
 
@@ -57,7 +57,7 @@ app.use(async (req, res, next) => {
         }
 
         let pageUrl = await loginCache.get(url).page.url();
-        if (pageUrl !== `${url}/home`) {
+        if (!pageUrl.includes(`${url}/backend/home`)) {
             await login(loginCache.get(url).page, url, loginCache.get(url).username, loginCache.get(url).password);
         }
     }
@@ -122,10 +122,10 @@ app.post('/login', async (req, res) => {
 
 app.post('/register', async (req, res) => {
     const page = await b.newPage();
-    const { url, username, tCode } = req.body;
+    const { url, username } = req.body;
 
     try {
-        const result = await register(page, url, username, tCode);
+        const result = await register(page, url, username);
         if (result.success == false)
             res.status(400).json({ message: 'User registration not successful', result });
         else

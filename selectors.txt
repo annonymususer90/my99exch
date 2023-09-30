@@ -1,0 +1,32 @@
+login
+https://admin.my99exch.com/login
+
+Username
+/html/body/div[1]/div/div/div[2]/div/form/div[1]/input
+
+Pass
+/html/body/div[1]/div/div/div[2]/div/form/div[2]/input
+
+Remember
+/html/body/div[1]/div/div/div[2]/div/form/div[3]/label
+
+
+
+
+
+
+create client button
+/html/body/header/nav/div/ul/li[6]/a/b
+
+Name
+/html/body/main/div/div/div/div/div/div/div/form/div[1]/input
+
+UseName
+/html/body/main/div/div/div/div/div/div/div/form/div[2]/input
+
+Password
+/html/body/main/div/div/div/div/div/div/div/form/div[3]/input
+
+Repeat Pass
+/html/body/main/div/div/div/div/div/div/div/form/div[4]/label
+

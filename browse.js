@@ -3,32 +3,38 @@ const { infoAsync, errorAsync } = require('./apputils');
 
 async function login(page, url, username, password) {
     await page.goto(url, { timeout: 90000 });
-    await page.waitForXPath('/html/body/div[2]/div/div/div/div[1]/div[3]/button')
-        .then(element => element.click());
-    await page.waitForSelector('#input-1');
-    await page.type('#input-1', username);
-    await page.type('#input-2', password);
-    await page.evaluate(`document.querySelector('form[data-vv-scope="form-login"]').children[2].firstChild.click();`);
+    await page.waitForXPath('/html/body/div[1]/div/div/div[2]/div/form/div[1]/input')
+        .then(
+            await page.type('#username', username),
+            await page.type('#password', password)
+        );
+
+
+    await page.evaluate(`document.querySelector('label[for="remember_me"]').click();`);
+    await page.click('#login-form > div:nth-child(5) > button');
     await page.waitForNavigation({ timeout: 90000 });
     infoAsync(`login successful, url: ${url}`);
+    return;
 }
 
-async function register(page, url, username, tCode) {
+async function register(page, url, username) {
     try {
-        await page.goto(`${url}/users/insertuser`, { timeout: 120000 });
+        await page.goto(`${url}`, { timeout: 120000 });
+        await page.waitForSelector('body');
+        await page.waitForSelector('body > header > nav > div > ul > li:nth-child(6) > a')
+            .then(element => element.click());
 
-        await page.waitForXPath('/html/body/div[2]/div/div[2]/div/div/div/form/div/div[1]/div/div/div[1]/input', { timeout: 120000 })
+        await page.waitForXPath('/html/body/main/div/div/div/div/div/div/div/form/div[1]/input', { timeout: 120000 })
+            .then(element => element.type(username))
+            .catch(err => console.log(err));
+        await page.waitForXPath('/html/body/main/div/div/div/div/div/div/div/form/div[2]/input', { timeout: 120000 })
             .then(element => element.type(username));
-        await page.waitForXPath('/html/body/div[2]/div/div[2]/div/div/div/form/div/div[1]/div/div/div[2]/input', { timeout: 120000 })
-            .then(element => element.type(username));
-        await page.waitForXPath('/html/body/div[2]/div/div[2]/div/div/div/form/div/div[1]/div/div/div[3]/input', { timeout: 120000 })
+        await page.waitForXPath('/html/body/main/div/div/div/div/div/div/div/form/div[3]/input', { timeout: 120000 })
             .then(element => element.type(defaultPassword));
-        await page.waitForXPath('/html/body/div[2]/div/div[2]/div/div/div/form/div/div[1]/div/div/div[4]/input', { timeout: 120000 })
-            .then(element => element.type(defaultPassword));
-        await page.waitForXPath('/html/body/div[2]/div/div[2]/div/div/div/form/div/div[2]/div/div/div[2]/select', { timeout: 120000 })
-            .then(element => element.select('7'));
-        await page.waitForXPath('/html/body/div[2]/div/div[2]/div/div/div/form/div/div[2]/div/div/div[5]/input', { timeout: 120000 })
-            .then(element => element.type(tCode + '\n'));
+        await page.waitForXPath('/html/body/main/div/div/div/div/div/div/div/form/div[4]/label', { timeout: 120000 })
+            .then(element => element.type(defaultPassword + '\n'));
+        // await page.waitForNavigation('body > main > div > div > div > div > div > div > div > form > div:nth-child(12) > input', { timeout: 120000 })
+        //     .then(ele => ele.click());
 
         await page.waitForNavigation({ timeout: 1000 })
             .catch(async err => {
@@ -45,16 +51,6 @@ async function register(page, url, username, tCode) {
         return { success: false, error: "invalid username" };
     }
 }
-
-function isRememberCookiePresent(cookies) {
-    for (const cookie of cookies) {
-        if (cookie.name === 'rememberMe') {
-            return true;
-        }
-    }
-    return false;
-}
-
 
 async function changePass(page, url, username, pass) {
     try {
@@ -84,11 +80,20 @@ async function changePass(page, url, username, pass) {
 
 async function lockUser(page, url, username, tCode) {
     try {
-        await page.goto(`${url}/users`, { timeout: 120000 });
-        await page.waitForSelector('#layout-wrapper > div.main-content > div > div > div > div.row.account-list > div > div > div > div.row.row5 > div.col-md-6.mb-2.search-form > form > div.d-inline-block.form-group.form-group-feedback.form-group-feedback-right > input', { timeout: 120000 });
-        await page.waitForSelector('#layout-wrapper > div.main-content > div > div > div > div.row.account-list > div > div > div > div.row.row5 > div.col-md-6.mb-2.search-form > form > div.d-inline-block.form-group.form-group-feedback.form-group-feedback-right > input')
+        await page.goto(`${url}`, { timeout: 120000 });
+        await page.waitForSelector('body > header > nav > div > ul.right.hide-on-med-and-down > li:nth-child(6) > a', { timeout: 120000 })
+            .then(
+                await page.click('body > header > nav > div > ul.right.hide-on-med-and-down > li:nth-child(6) > a', { timeout: 120000 })
+            );
+        await page.waitForSelector('#listUser > li:nth-child(1) > a', { timeout: 120000 })
+            .then(
+                await page.click('#listUser > li:nth-child(1) > a', { timeout: 120000 })
+            );
+        await page.waitForNavigation({ timeout: 120000 });
+        await page.waitForSelector('#search-user', { timeout: 120000 });
+        await page.waitForSelector('#search-user')
             .then(element => element.type(username + "\n"));
-        await page.waitForSelector(`span[title='${username}']`, { timeout: 3000 })
+        await page.evaluate(`document.querySelector('tbody').children[0].children[0].children[1].innerText === ${username}`, { timeout: 6000 })
             .catch(() => {
                 throw new Error("invalid username");
             });
@@ -98,7 +103,7 @@ async function lockUser(page, url, username, tCode) {
         // await page.evaluate(`document.querySelector('form[data-vv-scope="UserLock"]').children[1].children[1].firstChild.click()`);
         await page.waitForSelector('input[name="UserLockMpassword"]')
             .then(async element => await element.type(tCode + "\n"));
-        
+
     } catch (error) {
         await login();
         return { success: false, error: error.message };
