@@ -4,6 +4,13 @@ const winston = require('winston');
 const { combine, timestamp, printf } = winston.format;
 const DailyRotateFile = require('winston-daily-rotate-file');
 
+const isCredentialsAvailable = (loginCache, url) => {
+    return !(!loginCache.get(url)
+        || !loginCache.get(url).page
+        || !loginCache.get(url).username
+        || !loginCache.get(url).password);
+}
+
 const logFormat = printf(({ level, message, timestamp }) => {
     return `${timestamp} ${level}: ${message}`;
 });
@@ -88,5 +95,6 @@ module.exports = {
     logger: logger,
     infoAsync: infoAsync,
     errorAsync: errorAsync,
-    warnAsync: warnAsync
+    warnAsync: warnAsync,
+    isCredentialsAvailable: isCredentialsAvailable
 };

@@ -3,7 +3,7 @@ const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const puppeteer = require('puppeteer');
-const { infoAsync, errorAsync, warnAsync, isValidAmount } = require('./apputils');
+const { isCredentialsAvailable, infoAsync, errorAsync, warnAsync, isValidAmount } = require('./apputils');
 const { login, register, lockUser, deposit, withdraw, resetPass } = require('./browse');
 
 require('dotenv').config();
@@ -35,7 +35,7 @@ var b;
             process.env.NODE_ENV === "production"
                 ? process.env.PUPPETEER_EXECUTABLE_PATH
                 : puppeteer.executablePath(),
-        headless: true,
+        headless: false,
         timeout: 120000,
         defaultViewport: { width: 1366, height: 768 },
     });
@@ -48,12 +48,10 @@ app.use(express.static('public'));
 app.use(async (req, res, next) => {
     if (req.path !== '/login' && req.path !== '/logs' && req.path !== '/' && req.path !== '/addsite' && req.path !== '/getlogs') {
         const { url } = req.body;
-        if (!loginCache.get(url)) {
+
+        if (!isCredentialsAvailable(loginCache, url)) {
             res.status(401).json({ message: 'login details not available' });
             return;
-        }
-        if (!loginCache.get(url).page) {
-            loginCache.get(url).page = await b.newPage();
         }
 
         let pageUrl = await loginCache.get(url).page.url();
@@ -77,43 +75,21 @@ app.get('/getlogs', (req, res) => {
     const filePath = path.join(__dirname, 'public', 'downloadlogs.html');
     res.sendFile(filePath);
 });
+
 app.post('/login', async (req, res) => {
-    const isLogin = async (url) => {
-        if (!loginCache.get(url)) {
-            return false;
-        }
-        const page = loginCache.get(url).page;
-        if (!page) {
-            return false;
-        }
-
-        const pageUrl = await page.url();
-        if (pageUrl !== `${url}/home`) {
-            return false;
-        }
-
-        return true;
-    }
-
     const { url, username, password } = req.body;
-    try {
-        let flag = await isLogin(url);
-        if (!flag) {
-            let page = loginCache.get(url)?.page;
-            if (page === undefined) {
-                page = await b.newPage();
-            }
 
-            loginCache.set(url, {
-                page: page,
-                username: username,
-                password: password
-            });
+    try {
+
+        if (isCredentialsAvailable(loginCache, url)) {
+            return res.status(200).json({ message: 'user already loggedin' })
+        } else {
+            const page = await b.newPage();
+            loginCache.set(url, { page: page, username: username, password: password })
+
             await login(page, url, username, password);
             res.status(200).json({ message: 'login success to url ' + url });
-            return;
         }
-        res.json({ message: 'login success to url ' + url });
     } catch (ex) {
         errorAsync(ex.message);
         res.status(400).json({ message: 'login unsuccess to ' + url });
