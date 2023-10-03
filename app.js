@@ -21,6 +21,7 @@ const corsOptions = {
 };
 
 var b;
+var isLoginBusy = false;
 
 (async () => {
     b = await puppeteer.launch({
@@ -50,15 +51,29 @@ app.use(async (req, res, next) => {
         const { url } = req.body;
 
         if (!isCredentialsAvailable(loginCache, url)) {
-            res.status(401).json({ message: 'login details not available' });
+            res.status(401).json({ message: 'admin credentials not available' });
             return;
         }
 
         let pageUrl = await loginCache.get(url).page.url();
+
         if (!pageUrl.includes(`${url}/backend/home`)) {
-            await login(loginCache.get(url).page, url, loginCache.get(url).username, loginCache.get(url).password);
+            await loginCache.get(url)?.page.close();
+
+            loginCache.set(url, {
+                page: await b.newPage(),
+                username: loginCache.get(url).username,
+                password: loginCache.get(url).password
+            });
+
+            if (!isLoginBusy) {
+                isLoginBusy = true;
+                await login(loginCache.get(url).page, url, loginCache.get(url).username, loginCache.get(url).password);
+                isLoginBusy = false;
+            }
         }
     }
+
     next();
 });
 
@@ -82,12 +97,17 @@ app.post('/login', async (req, res) => {
     try {
 
         if (isCredentialsAvailable(loginCache, url)) {
-            return res.status(200).json({ message: 'user already loggedin' })
+            return res.status(200).json({ message: 'admin already loggedin' });
         } else {
             const page = await b.newPage();
             loginCache.set(url, { page: page, username: username, password: password })
 
-            await login(page, url, username, password);
+            if (!isLoginBusy) {
+                isLoginBusy = true;
+                await login(page, url, username, password);
+                isLoginBusy = false;
+            }
+
             res.status(200).json({ message: 'login success to url ' + url });
         }
     } catch (ex) {
