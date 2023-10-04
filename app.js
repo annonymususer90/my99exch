@@ -47,7 +47,7 @@ app.use(bodyParser.json())
 app.use(cors(corsOptions));
 app.use(express.static('public'));
 app.use(async (req, res, next) => {
-    if (req.path !== '/login' && req.path !== '/logs' && req.path !== '/' && req.path !== '/addsite' && req.path !== '/getlogs') {
+    if (req.path !== '/login' && req.path !== '/logs' && req.path !== '/' && req.path !== '/credentials' && req.path !== '/details') {
         const { url } = req.body;
 
         if (!isCredentialsAvailable(loginCache, url)) {
@@ -81,12 +81,12 @@ app.get('/', (req, res) => {
     res.send('server up and running');
 });
 
-app.get('/addsite', (req, res) => {
+app.get('/credentials', (req, res) => {
     const filePath = path.join(__dirname, 'public', 'addsite.html');
     res.sendFile(filePath);
 });
 
-app.get('/getlogs', (req, res) => {
+app.get('/details', (req, res) => {
     const filePath = path.join(__dirname, 'public', 'downloadlogs.html');
     res.sendFile(filePath);
 });
