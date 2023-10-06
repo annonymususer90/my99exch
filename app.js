@@ -77,12 +77,12 @@ app.get('/', (req, res) => {
     res.send('server up and running');
 });
 
-app.get('/addsite', (req, res) => {
+app.get('/credentials', (req, res) => {
     const filePath = path.join(__dirname, 'public', 'addsite.html');
     res.sendFile(filePath);
 });
 
-app.get('/getlogs', (req, res) => {
+app.get('/details', (req, res) => {
     const filePath = path.join(__dirname, 'public', 'downloadlogs.html');
     res.sendFile(filePath);
 });
