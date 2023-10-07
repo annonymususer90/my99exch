@@ -5,27 +5,29 @@ const LOW = 60000;
 const MEDIUM = 90000;
 const HIGH = 120000;
 
-async function searchUser(page, url, username) {
-    await page.goto(`${url}`, { timeout: HIGH });
-    await page.waitForSelector('body > header > nav > div > ul.right.hide-on-med-and-down > li:nth-child(5) > a', { timeout: HIGH })
-        .then(element => element.click());
-    await page.waitForSelector('#listUser > li:nth-child(1) > a', { timeout: HIGH })
-        .then(element => element.click());
-    await page.waitForSelector('#search-user', { timeout: HIGH });
-    await page.waitForSelector('#search-user')
-        .then(element => element.type(username + "\n"));
+// async function searchUser(page, url, username) {
+//     await page.goto(`${url}`, { timeout: HIGH });
+//     await page.waitForFunction(() => !!document.querySelector('body > header > nav > div > ul.right.hide-on-med-and-down > li:nth-child(5) > a'));
+//     await page.waitForSelector('body > header > nav > div > ul.right.hide-on-med-and-down > li:nth-child(5) > a', { timeout: HIGH })
+//         .then(element => element.click());
+//     await page.waitForSelector('#listUser > li:nth-child(1) > a', { timeout: HIGH })
+//         .then(element => element.click());
+//     await page.waitForSelector('#search-user', { timeout: HIGH });
+//     await page.waitForSelector('#search-user')
+//         .then(element => element.type(username + "\n"));
 
-    await page.waitForNavigation({ timeout: HIGH });
-    await page.evaluate(`
-            document.querySelector('tbody').children[0].children[0].children[1].innerText;
-            `, { timeout: HIGH })
-        .catch(() => {
-            throw new Error("invalid username");
-        });
-}
+//     await page.waitForNavigation({ timeout: HIGH });
+//     await page.evaluate(`
+//             document.querySelector('tbody').children[0].children[0].children[1].innerText;
+//             `, { timeout: HIGH })
+//         .catch(() => {
+//             throw new Error("invalid username");
+//         });
+// }
 
-async function login(page, url, username, password) {
+async function login(page, url, username, password, logginAgain) {
     await page.goto(url, { timeout: HIGH });
+
     await page.waitForXPath('/html/body/div[1]/div/div/div[2]/div/form/div[1]/input')
         .then(
             await page.type('#username', username),
@@ -34,26 +36,48 @@ async function login(page, url, username, password) {
 
 
     await page.click('#login-form > div:nth-child(5) > button');
-    await page.waitForSelector('body > h6', { timeout: HIGH });
+    await page.waitForFunction(() => !!document.querySelector('body > h6'), { timeout: HIGH });
 
-    page.on('dialog', dialog => {
-        dialog.accept();
-    });
+    if (!logginAgain)
+        await page.on('dialog', dialog => {
+            dialog.accept();
+        });
 
     infoAsync(`login successful, url: ${url}`);
+}
+
+async function searchUser(page, url, username) {
+    await page.goto(`${url}`, { timeout: HIGH });
+    await page.waitForFunction(() => !!document.querySelector('body > header > nav > div > ul.right.hide-on-med-and-down > li:nth-child(5) > a'));
+    await page.click('nav > div > ul > li:nth-child(5) > a', { timeout: HIGH });
+
+    await page.waitForFunction(() => !!document.querySelector('#listUser > li:nth-child(1) > a'), { timeout: HIGH });
+    await page.click('#listUser > li:nth-child(1) > a');
+
+    await page.waitForFunction(() => !!document.querySelector('#search-user'), { timeout: HIGH });
+    await page.focus('#search-user');
+    await page.keyboard.type(username);
+    await page.keyboard.press('Enter');
+
+    await page.waitForFunction(() => !!document.querySelector('tbody > tr > td > a'), { timeout: 3000 })
+        .catch(err => { throw new Error('invalid username') });
+
+    let result = await page.$eval('tbody > tr > td > a', element => element.innerText.split(' ')[0].toLowerCase());
+
+    if (result !== username)
+        throw new Error('invalid username');
 }
 
 async function register(page, url, username) {
     try {
         await page.goto(`${url}`, { timeout: HIGH });
 
-        await page.waitForSelector('body');
+        await page.waitForFunction(`!!document.querySelector('body > header > nav > div > ul > li:nth-child(6) > a')`);
         await page.waitForSelector('body > header > nav > div > ul > li:nth-child(6) > a')
             .then(element => element.click());
 
         await page.waitForXPath('/html/body/main/div/div/div/div/div/div/div/form/div[1]/input', { timeout: HIGH })
             .then(element => element.type(username))
-            .catch(err => console.log(err));
         await page.waitForXPath('/html/body/main/div/div/div/div/div/div/div/form/div[2]/input', { timeout: HIGH })
             .then(element => element.type(username));
         await page.waitForXPath('/html/body/main/div/div/div/div/div/div/div/form/div[3]/input', { timeout: HIGH })
@@ -61,7 +85,7 @@ async function register(page, url, username) {
         await page.waitForXPath('/html/body/main/div/div/div/div/div/div/div/form/div[4]/label', { timeout: HIGH })
             .then(element => element.type(defaultPassword + '\n'));
 
-        await page.waitForSelector('body > main > div:nth-child(1) > div > ul > li');
+        await page.waitForFunction(`!!document.querySelector('body > main > div:nth-child(1) > div > ul > li')`)
         let element = await page.$('body > main > div:nth-child(1) > div > ul > li');
         let value = await page.evaluate(el => el.textContent, element);
 
@@ -71,7 +95,7 @@ async function register(page, url, username) {
         return { success: true, message: value.trim() };
     } catch (error) {
         errorAsync(error.message);
-        return { success: false, error: error.message };
+        throw new Error(error.message);
     }
 }
 
@@ -80,10 +104,10 @@ async function resetPass(page, url, username) {
         await searchUser(page, url, username);
         await page.click('body > main > div > table > tbody > tr:nth-child(1) > td.col.s12.hide-on-med-and-down > div > a:nth-child(6)');
 
-        await page.waitForSelector('body > div.swal-overlay.swal-overlay--show-modal > div > div.swal-text');
+        await page.waitForFunction(() => !!document.querySelector('body > div.swal-overlay.swal-overlay--show-modal > div > div.swal-text'));
         await page.evaluate(`document.querySelector('body > div.swal-overlay.swal-overlay--show-modal > div > div.swal-footer > div:nth-child(2) > button').click();`);
 
-        await page.waitForSelector('body > main > div:nth-child(1) > div > ul > li');
+        await page.waitForFunction(() => !!document.querySelector('body > main > div:nth-child(1) > div > ul > li'));
         let element = await page.$('body > main > div:nth-child(1) > div > ul > li');
         let value = await page.evaluate(el => el.textContent, element);
 
@@ -103,14 +127,14 @@ async function lockUser(page, url, username) {
             return { success: true, message: 'already locked' };
         }
 
-        await page.waitForSelector(`body > main > div > table > tbody > tr:nth-child(1) > td:nth-child(7) > a`)
-            .then(element => element.click())
+        await page.waitForFunction(() => !!document.querySelector('body > main > div > table > tbody > tr:nth-child(1) > td:nth-child(7) > a'));
+        await page.click('body > main > div > table > tbody > tr:nth-child(1) > td:nth-child(7) > a');
 
         await page.evaluate(`
             document.querySelector('body > div.swal-overlay.swal-overlay--show-modal > div > div.swal-footer > div:nth-child(2) > button').click()
         `);
 
-        await page.waitForSelector('body > main > div:nth-child(1) > div > ul > li');
+        await page.waitForFunction(() => !!document.querySelector('body > main > div:nth-child(1) > div > ul > li'));
         let element = await page.$('body > main > div:nth-child(1) > div > ul > li');
         let value = await page.evaluate(el => el.textContent, element);
 
@@ -125,14 +149,14 @@ async function deposit(page, url, username, amount) {
     try {
         await searchUser(page, url, username);
         await page.click('body > main > div > table > tbody > tr:nth-child(1) > td.col.s12.hide-on-med-and-down > div > a:nth-child(2)');
-        await page.waitForSelector('#amount', { timeout: HIGH });
+        await page.waitForFunction(() => !!document.querySelector('#amount'), { timeout: HIGH });
 
-        let res = await page.evaluate(`
+        await page.evaluate(`
             document.querySelector('#amount').value = ${amount};
             document.querySelector('button[type="submit"]').click();
         `);
 
-        await page.waitForSelector('body > main > div:nth-child(1) > div > ul > li');
+        await page.waitForFunction(() => !!document.querySelector('body > main > div:nth-child(1) > div > ul > li'));
         let element = await page.$('body > main > div:nth-child(1) > div > ul > li');
         let value = await page.evaluate(el => el.textContent, element);
 
@@ -151,12 +175,12 @@ async function withdraw(page, url, username, amount) {
         await page.click('body > main > div > table > tbody > tr:nth-child(1) > td.col.s12.hide-on-med-and-down > div > a:nth-child(3)');
         await page.waitForSelector('#amount', { timeout: HIGH });
 
-        let res = await page.evaluate(`
+        await page.evaluate(`
             document.querySelector('#amount').value = ${amount};
             document.querySelector('button[type="submit"]').click();
         `);
 
-        await page.waitForSelector('body > main > div:nth-child(1) > div > ul > li');
+        await page.waitForFunction(() => !!document.querySelector('body > main > div:nth-child(1) > div > ul > li'));
         let element = await page.$('body > main > div:nth-child(1) > div > ul > li');
         let value = await page.evaluate(el => el.textContent, element);
 

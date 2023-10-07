@@ -14,40 +14,44 @@ const bodyParser = require('body-parser');
 const loginCache = new Map();
 const allowedDomains = ['http://fgpunt.com', 'https://fgpunt.com'];
 const corsOptions = {
-    origin: null,
+    origin: allowedDomains,
     methods: 'POST, GET',
     credentials: false,
     optionsSuccessStatus: 204
 };
 
 var b;
-var isLoginBusy = false;
 
-(async () => {
-    b = await puppeteer.launch({
-        args: [
-            '--disable-setuid-sandbox',
-            '--no-sandbox',
-            '--single-process',
-            '--no-zygote',
-            '--disable-gpu',
-        ],
-        executablePath:
-            process.env.NODE_ENV === "production"
-                ? process.env.PUPPETEER_EXECUTABLE_PATH
-                : puppeteer.executablePath(),
-        headless: true,
-        timeout: 120000,
-        defaultViewport: { width: 1366, height: 768 },
-    });
-})();
+puppeteer.launch({
+    args: [
+        '--disable-setuid-sandbox',
+        '--no-sandbox',
+        '--single-process',
+        '--no-zygote',
+        '--disable-gpu',
+    ],
+    executablePath:
+        process.env.NODE_ENV === "production"
+            ? process.env.PUPPETEER_EXECUTABLE_PATH
+            : puppeteer.executablePath(),
+    headless: true,
+    timeout: 120000,
+    defaultViewport: {
+        width: 1366,
+        height: 768
+    },
+}).then((browser) => { b = browser });
 
 app.use(express.json());
 app.use(bodyParser.json())
 app.use(cors(corsOptions));
 app.use(express.static('public'));
+app.use((req, res, next) => {
+    while (loginCache.get(req.body.url)?.isBusy) { }
+    next();
+});
 app.use(async (req, res, next) => {
-    if (req.path !== '/login' && req.path !== '/logs' && req.path !== '/' && req.path !== '/credentials' && req.path !== '/details') {
+    if (!['/login', '/logs', '/', 'addsite', '/getlogs'].includes(req.path)) {
         const { url } = req.body;
 
         if (!isCredentialsAvailable(loginCache, url)) {
@@ -57,26 +61,18 @@ app.use(async (req, res, next) => {
 
         let pageUrl = await loginCache.get(url).page.url();
 
-        if (!pageUrl.includes(`${url}/backend/home`)) {
-            await loginCache.get(url)?.page.close();
-
-            loginCache.set(url, {
-                page: await b.newPage(),
-                username: loginCache.get(url).username,
-                password: loginCache.get(url).password
-            });
-
-            if (!isLoginBusy) {
-                isLoginBusy = true;
-                await login(loginCache.get(url).page, url, loginCache.get(url).username, loginCache.get(url).password);
-                isLoginBusy = false;
-            }
+        if (pageUrl.includes('login')) {
+            loginCache.get(url).isBusy = true;
+            let { page, username, password } = loginCache.get(url);
+            await login(page, url, username, password, true);
+            loginCache.get(url).isBusy = false;
         }
     }
 
     next();
 });
 
+/* *** endpoints *** */
 app.get('/', (req, res) => {
     res.send('server up and running');
 });
@@ -100,13 +96,16 @@ app.post('/login', async (req, res) => {
             return res.status(200).json({ message: 'admin already loggedin' });
         } else {
             const page = await b.newPage();
-            loginCache.set(url, { page: page, username: username, password: password })
+            loginCache.set(url, {
+                page: page,
+                username: username,
+                password: password,
+                isBusy: true
+            });
 
-            if (!isLoginBusy) {
-                isLoginBusy = true;
-                await login(page, url, username, password);
-                isLoginBusy = false;
-            }
+            loginCache.get(url).isBusy = true;
+            await login(page, url, username, password);
+            loginCache.get(url).isBusy = false;
 
             res.status(200).json({ message: 'login success to url ' + url });
         }
@@ -122,10 +121,7 @@ app.post('/register', async (req, res) => {
 
     try {
         const result = await register(page, url, username);
-        if (result.success == false)
-            res.status(400).json({ message: 'User registration not successful', result });
-        else
-            res.json({ message: 'User registration successful', result });
+        res.status(result.success ? 200 : 300).json({ message: result.message });
     } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
         errorAsync(`request responded with error: ${error.message}`);
@@ -140,11 +136,7 @@ app.post('/resetpass', async (req, res) => {
 
     try {
         const result = await resetPass(page, url, username);
-        if (result.success) {
-            res.json({ message: result.message });
-        } else {
-            res.status(400).json({ message: result.message });
-        }
+        res.status(result.success ? 200 : 400).json({ message: result.message });
     } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
         errorAsync(error.message);
@@ -168,10 +160,10 @@ app.post('/deposit', async (req, res) => {
         const endTime = new Date();
         responseTime = endTime - startTime;
         if (result.success == false) {
-            res.status(400).json({ message: 'deposit not successful', result });
+            res.status(400).json({ message: result.message });
             warnAsync(`[res] url: ${url}, status: ${res.statusCode}, user: ${username}, message: ${result.message} (${responseTime} ms)`);
         } else {
-            res.json({ message: 'deposited successfully', result });
+            res.json({ message: result.message });
             infoAsync(`[res] url: ${url}, status: ${res.statusCode}, user: ${username}, amount: ${amount}, message: ${result.message} (${responseTime} ms)`);
         }
     } catch (error) {
@@ -198,10 +190,10 @@ app.post('/withdraw', async (req, res) => {
         const endTime = new Date();
         const responseTime = endTime - startTime;
         if (result.success == false) {
-            res.status(400).json({ message: 'withdraw not successful', result });
+            res.status(400).json({ message: result.message });
             warnAsync(`[res] url: ${url}, status: ${res.statusCode}, user: ${username}, message: ${result.message} (${responseTime} ms)`);
         } else {
-            res.json({ message: 'Withdrawn successfully', result });
+            res.json({ message: result.message });
             infoAsync(`[res] url: ${url}, status: ${res.statusCode}, user: ${username}, amount: ${amount}, message: ${result.message} (${responseTime} ms)`);
         }
     } catch (error) {
@@ -219,7 +211,7 @@ app.post('/lockuser', async (req, res) => {
     try {
         const result = await lockUser(page, url, username);
         if (result.success)
-            res.status(200).json({ message: 'User locked successfully', result });
+            res.status(200).json({ message: result.message });
         else
             res.status(400).json({ message: result.message });
     } catch (err) {
