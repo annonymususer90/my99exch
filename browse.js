@@ -5,26 +5,6 @@ const LOW = 60000;
 const MEDIUM = 90000;
 const HIGH = 120000;
 
-// async function searchUser(page, url, username) {
-//     await page.goto(`${url}`, { timeout: HIGH });
-//     await page.waitForFunction(() => !!document.querySelector('body > header > nav > div > ul.right.hide-on-med-and-down > li:nth-child(5) > a'));
-//     await page.waitForSelector('body > header > nav > div > ul.right.hide-on-med-and-down > li:nth-child(5) > a', { timeout: HIGH })
-//         .then(element => element.click());
-//     await page.waitForSelector('#listUser > li:nth-child(1) > a', { timeout: HIGH })
-//         .then(element => element.click());
-//     await page.waitForSelector('#search-user', { timeout: HIGH });
-//     await page.waitForSelector('#search-user')
-//         .then(element => element.type(username + "\n"));
-
-//     await page.waitForNavigation({ timeout: HIGH });
-//     await page.evaluate(`
-//             document.querySelector('tbody').children[0].children[0].children[1].innerText;
-//             `, { timeout: HIGH })
-//         .catch(() => {
-//             throw new Error("invalid username");
-//         });
-// }
-
 async function login(page, url, username, password, logginAgain) {
     await page.goto(url, { timeout: HIGH });
 
