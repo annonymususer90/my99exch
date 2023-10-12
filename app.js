@@ -51,7 +51,7 @@ app.use((req, res, next) => {
     next();
 });
 app.use(async (req, res, next) => {
-    if (!['/login', '/logs', '/', 'addsite', '/getlogs'].includes(req.path)) {
+    if (!['/login', '/logs', '/', '/credentials', '/details'].includes(req.path)) {
         const { url } = req.body;
 
         if (!isCredentialsAvailable(loginCache, url)) {
