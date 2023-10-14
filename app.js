@@ -1,10 +1,11 @@
-const { existsSync } = require('fs');
+const { existsSync, stat } = require('fs');
 const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const puppeteer = require('puppeteer');
 const { isCredentialsAvailable, infoAsync, errorAsync, warnAsync, isValidAmount } = require('./apputils');
 const { login, register, lockUser, deposit, withdraw, resetPass } = require('./browse');
+const { createTransaction, getTransactionsAndWorkbook } = require('./db');
 
 require('dotenv').config();
 
@@ -40,7 +41,7 @@ puppeteer.launch({
         width: 1366,
         height: 768
     },
-}).then((browser) => { b = browser });
+}).then((browser) => b = browser);
 
 app.use(express.json());
 app.use(bodyParser.json())
@@ -51,7 +52,7 @@ app.use((req, res, next) => {
     next();
 });
 app.use(async (req, res, next) => {
-    if (!['/login', '/logs', '/', '/credentials', '/details'].includes(req.path)) {
+    if (!['/login', '/logs', '/', '/credentials', '/details', '/generate-excel'].includes(req.path)) {
         const { url } = req.body;
 
         if (!isCredentialsAvailable(loginCache, url)) {
@@ -85,6 +86,28 @@ app.get('/credentials', (req, res) => {
 app.get('/details', (req, res) => {
     const filePath = path.join(__dirname, 'public', 'downloadlogs.html');
     res.sendFile(filePath);
+});
+
+app.post('/generate-excel', (req, res) => {
+    const { startDate, endDate } = req.body;
+
+    getTransactionsAndWorkbook(startDate, endDate)
+        .then(workbook => {
+            // Set the response headers to indicate an Excel file
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            res.setHeader('Content-Disposition', `attachment; filename=log-${startDate}-${endDate}.xlsx`);
+
+            // Write the Excel workbook to the response
+            workbook.xlsx.write(res)
+                .catch(err => {
+                    res.status(500).send('Error generating Excel file');
+                    errorAsync(err.message);
+                });
+        })
+        .catch(err => {
+            res.status(500).send('Error: ' + err);
+            errorAsync(err);
+        });
 });
 
 app.post('/login', async (req, res) => {
@@ -146,8 +169,13 @@ app.post('/resetpass', async (req, res) => {
 });
 
 app.post('/deposit', async (req, res) => {
+
     const { url, username, amount } = req.body;
     const page = await b.newPage();
+    let result;
+    let responseTime;
+    let status = false;
+
     try {
         if (!isValidAmount(amount)) {
             res.status(400).json({ message: "invalid amount format" });
@@ -156,7 +184,7 @@ app.post('/deposit', async (req, res) => {
 
         infoAsync(`[req] ${url}, user: ${username}, amount: ${amount}`);
         const startTime = new Date();
-        const result = await deposit(page, url, username, amount);
+        result = await deposit(page, url, username, amount);
         const endTime = new Date();
         responseTime = endTime - startTime;
         if (result.success == false) {
@@ -164,6 +192,7 @@ app.post('/deposit', async (req, res) => {
             warnAsync(`[res] url: ${url}, status: ${res.statusCode}, user: ${username}, message: ${result.message} (${responseTime} ms)`);
         } else {
             res.json({ message: result.message });
+            status = true;
             infoAsync(`[res] url: ${url}, status: ${res.statusCode}, user: ${username}, amount: ${amount}, message: ${result.message} (${responseTime} ms)`);
         }
     } catch (error) {
@@ -171,12 +200,17 @@ app.post('/deposit', async (req, res) => {
         errorAsync(`[res] ${url} - ${res.statusCode}, Message: ${error.message}`);
     } finally {
         page.close();
+        createTransaction(url, 'd', username, amount, responseTime, result.message, status)
+            .catch(err => errorAsync(err.message));
     }
 });
 
 app.post('/withdraw', async (req, res) => {
     const { url, username, amount } = req.body;
     const page = await b.newPage();
+    let result;
+    let responseTime;
+    let status = false;
 
     try {
         if (!isValidAmount(amount)) {
@@ -186,14 +220,15 @@ app.post('/withdraw', async (req, res) => {
 
         infoAsync(`[req] ${url}, user: ${username}, amount: ${amount}`);
         const startTime = new Date();
-        const result = await withdraw(page, url, username, amount);
+        result = await withdraw(page, url, username, amount);
         const endTime = new Date();
-        const responseTime = endTime - startTime;
+        responseTime = endTime - startTime;
         if (result.success == false) {
             res.status(400).json({ message: result.message });
             warnAsync(`[res] url: ${url}, status: ${res.statusCode}, user: ${username}, message: ${result.message} (${responseTime} ms)`);
         } else {
             res.json({ message: result.message });
+            status = true;
             infoAsync(`[res] url: ${url}, status: ${res.statusCode}, user: ${username}, amount: ${amount}, message: ${result.message} (${responseTime} ms)`);
         }
     } catch (error) {
@@ -201,6 +236,8 @@ app.post('/withdraw', async (req, res) => {
         errorAsync(error.message);
     } finally {
         page.close();
+        createTransaction(url, 'w', username, amount, responseTime, result.message, status)
+            .catch(err => errorAsync(err.message));
     }
 });
 
@@ -222,30 +259,30 @@ app.post('/lockuser', async (req, res) => {
     }
 });
 
-app.post('/logs', (req, res) => {
-    const date = req.body.date;
+// app.post('/logs', (req, res) => {
+//     const date = req.body.date;
 
-    if (!date) {
-        return res.status(400).json({ error: 'Date is required in the request body.' });
-    }
+//     if (!date) {
+//         return res.status(400).json({ error: 'Date is required in the request body.' });
+//     }
 
-    if (!/^\d{4}-\d{2}$/.test(date)) {
-        return res.status(400).json({ error: 'Invalid date format. Please use yyyy-mm.' });
-    }
+//     if (!/^\d{4}-\d{2}$/.test(date)) {
+//         return res.status(400).json({ error: 'Invalid date format. Please use yyyy-mm.' });
+//     }
 
-    const filePath = path.join(__dirname, 'logs', `combined-${date}.log`);
+//     const filePath = path.join(__dirname, 'logs', `combined-${date}.log`);
 
-    if (!existsSync(filePath)) {
-        return res.status(404).json({ error: 'Log file not found.' });
-    }
+//     if (!existsSync(filePath)) {
+//         return res.status(404).json({ error: 'Log file not found.' });
+//     }
 
-    res.sendFile(filePath, (err) => {
-        if (err) {
-            errorAsync(err.message);
-            res.status(500).send('Error sending the file.');
-        }
-    });
-});
+//     res.sendFile(filePath, (err) => {
+//         if (err) {
+//             errorAsync(err.message);
+//             res.status(500).send('Error sending the file.');
+//         }
+//     });
+// });
 
 app.listen(PORT);
 

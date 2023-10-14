@@ -1,23 +1,27 @@
 async function getLog() {
-    const date = document.getElementById('date').value;
+    const startDate = document.getElementById('startdate').value;
+    const endDate = document.getElementById('enddate').value;
     const logContent = document.getElementById('logContent');
 
     logContent.textContent = 'Fetching log...';
 
     try {
-        const response = await fetch('/logs', {
+        const response = await fetch('/generate-excel', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ date })
+            body: JSON.stringify({
+                "startDate": startDate,
+                "endDate": endDate
+            })
         });
 
         if (response.ok) {
             const blob = await response.blob();
             const a = document.createElement('a');
             a.href = window.URL.createObjectURL(blob);
-            a.download = `log-${date}.log`;
+            a.download = `log-${startDate}-${endDate}.xlsx`;
             a.style.display = 'none';
             document.body.appendChild(a);
             a.click();

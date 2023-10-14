@@ -7,8 +7,10 @@
 <body>
     <h1>Download Logs</h1>
     <form id="logForm">
-        <label for="date">Date (yyyy-mm):</label>
-        <input type="text" id="date" name="date" required><br><br>
+        <label for="startdate">Start Date:</label>
+        <input type="date" id="startdate" name="startdate" required>
+        <label for="enddate">End Date:</label>
+        <input type="date" id="enddate" name="enddate" required><br><br>
 
         <button type="button" onclick="getLog()">Get Log</button>
     </form>
