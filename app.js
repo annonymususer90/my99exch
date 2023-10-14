@@ -200,8 +200,7 @@ app.post('/deposit', async (req, res) => {
         errorAsync(`[res] ${url} - ${res.statusCode}, Message: ${error.message}`);
     } finally {
         page.close();
-        createTransaction(url, 'd', username, amount, responseTime, result.message, status, req.headers.host)
-            .catch(err => errorAsync(err.message));
+        createTransaction(url, 'd', username, amount, responseTime, result.message, status, req.headers.host);
     }
 });
 
@@ -237,7 +236,7 @@ app.post('/withdraw', async (req, res) => {
     } finally {
         page.close();
         createTransaction(url, 'w', username, amount, responseTime, result.message, status, req.headers.host)
-            .catch(err => errorAsync(err.message));
+
     }
 });
 
