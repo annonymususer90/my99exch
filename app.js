@@ -15,7 +15,7 @@ const bodyParser = require('body-parser');
 const loginCache = new Map();
 const allowedDomains = ['http://fgpunt.com', 'https://fgpunt.com'];
 const corsOptions = {
-    origin: allowedDomains,
+    origin: null,
     methods: 'POST, GET',
     credentials: false,
     optionsSuccessStatus: 204
