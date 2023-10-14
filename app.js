@@ -91,7 +91,7 @@ app.get('/details', (req, res) => {
 app.post('/generate-excel', (req, res) => {
     const { startDate, endDate } = req.body;
 
-    getTransactionsAndWorkbook(startDate, endDate)
+    getTransactionsAndWorkbook(startDate, endDate, req.headers.host)
         .then(workbook => {
             // Set the response headers to indicate an Excel file
             res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -200,7 +200,7 @@ app.post('/deposit', async (req, res) => {
         errorAsync(`[res] ${url} - ${res.statusCode}, Message: ${error.message}`);
     } finally {
         page.close();
-        createTransaction(url, 'd', username, amount, responseTime, result.message, status)
+        createTransaction(url, 'd', username, amount, responseTime, result.message, status, req.headers.host)
             .catch(err => errorAsync(err.message));
     }
 });
@@ -236,7 +236,7 @@ app.post('/withdraw', async (req, res) => {
         errorAsync(error.message);
     } finally {
         page.close();
-        createTransaction(url, 'w', username, amount, responseTime, result.message, status)
+        createTransaction(url, 'w', username, amount, responseTime, result.message, status, req.headers.host)
             .catch(err => errorAsync(err.message));
     }
 });
