@@ -13,7 +13,7 @@ const pool = mysql.createPool({
 });
 
 // Function to create a new transaction record in the database
-function createTransaction(url, type, username, amount, timeTook, message, status) {
+function createTransaction(url, type, username, amount, timeTook, message, status, domain) {
     pool.getConnection((err, conn) => {
         if (err) {
             // Log an error message if there's an issue with the connection
@@ -21,8 +21,8 @@ function createTransaction(url, type, username, amount, timeTook, message, statu
         }
 
         conn.query(
-            'insert into transaction (url, type, username, amount, time_took, message, status) values (?, ?, ?, ?, ?, ?, ?);',
-            [url, type, username, amount, timeTook, message, status],
+            'insert into transaction (url, type, username, amount, time_took, message, status, domain) values (?, ?, ?, ?, ?, ?, ?, ?);',
+            [url, type, username, amount, timeTook, message, status, domain],
             (queryError, results) => {
                 conn.release(); // Release the database connection
 
@@ -45,7 +45,7 @@ function incrementDay(dateString) {
 }
 
 // Function to retrieve transaction data within a specified date range and create an Excel workbook
-function getTransactionsAndWorkbook(startDate, endDate) {
+function getTransactionsAndWorkbook(startDate, endDate, domain) {
     return new Promise((resolve, reject) => {
         // Get transactions
         pool.getConnection((err, connection) => {
@@ -57,8 +57,8 @@ function getTransactionsAndWorkbook(startDate, endDate) {
             endDate = incrementDay(endDate);
 
             connection.query(
-                "SELECT id, url, CASE WHEN type = 'd' THEN 'deposit' else 'withdraw' end as 'type of transaction', username, amount, time_of_transaction as 'time of transaction', message, case when status = 1 then 'true' else 'false' end as 'status of transaction' FROM transaction WHERE time_of_transaction BETWEEN ? AND ?",
-                [startDate, endDate],
+                "SELECT id, domain, url as 'website url', CASE WHEN type = 'd' THEN 'deposit' else 'withdraw' end as 'type of transaction', username, amount, time_of_transaction as 'time of transaction', message, case when status = 1 then 'true' else 'false' end as 'status of transaction' FROM transaction WHERE (time_of_transaction BETWEEN ? AND ?) AND domain = ?",
+                [startDate, endDate, domain],
                 (queryError, results) => {
                     connection.release();
                     if (queryError) {
