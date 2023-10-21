@@ -4,7 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const puppeteer = require('puppeteer');
 const { isCredentialsAvailable, infoAsync, errorAsync, warnAsync, isValidAmount } = require('./apputils');
-const { login, register, lockUser, deposit, withdraw, resetPass } = require('./browse');
+const { isLoggedIn, login, register, lockUser, deposit, withdraw, resetPass } = require('./browse');
 const { createTransaction, getTransactionsAndWorkbook } = require('./db');
 
 require('dotenv').config();
@@ -35,7 +35,7 @@ puppeteer.launch({
         process.env.NODE_ENV === "production"
             ? process.env.PUPPETEER_EXECUTABLE_PATH
             : puppeteer.executablePath(),
-    headless: true,
+    headless: false,
     timeout: 120000,
     defaultViewport: {
         width: 1366,
@@ -52,25 +52,33 @@ app.use((req, res, next) => {
     next();
 });
 app.use(async (req, res, next) => {
-    if (!['/login', '/logs', '/', '/credentials', '/details', '/generate-excel'].includes(req.path)) {
-        const { url } = req.body;
+    try {
+        if (!['/login', '/logs', '/', '/credentials', '/details', '/generate-excel'].includes(req.path)) {
+            const { url } = req.body;
 
-        if (!isCredentialsAvailable(loginCache, url)) {
-            res.status(401).json({ message: 'admin credentials not available' });
-            return;
+            if (!isCredentialsAvailable(loginCache, url)) {
+                res.status(401).json({ message: 'admin credentials not available' });
+                return;
+            }
+
+            if (!isLoggedIn(loginCache.get(url).page)) {
+                loginCache.get(url).isBusy = true;
+                let { page, username, password } = loginCache.get(url);
+                let result = await login(page, url, username, password, true);
+
+                if (result.status)
+                    res.status(400).json({ message: result.message });
+
+                loginCache.get(url).isBusy = false;
+                return;
+            }
         }
 
-        let pageUrl = await loginCache.get(url).page.url();
-
-        if (pageUrl.includes('login')) {
-            loginCache.get(url).isBusy = true;
-            let { page, username, password } = loginCache.get(url);
-            await login(page, url, username, password, true);
-            loginCache.get(url).isBusy = false;
-        }
+        next();
+    } catch (err) {
+        errorAsync(err.message);
+        return res.status(500).send();
     }
-
-    next();
 });
 
 /* *** endpoints *** */
@@ -110,31 +118,55 @@ app.post('/generate-excel', (req, res) => {
         });
 });
 
+// This route handles the login process when a POST request is made to '/login'.
 app.post('/login', async (req, res) => {
+    // Extract the URL, username, and password from the request body.
     const { url, username, password } = req.body;
 
-    try {
+    // Check if a user is already logged in based on the 'loginCache'.
+    if (
+        loginCache.has(url) &&
+        loginCache.get(url).page &&
+        isLoggedIn(loginCache.get(url).page)
+    ) {
+        // If a user is already logged in, send a response indicating an admin is logged in.
+        return res.status(200).send('Admin is already logged in');
+    }
 
-        if (isCredentialsAvailable(loginCache, url)) {
-            return res.status(200).json({ message: 'admin already loggedin' });
-        } else {
-            const page = await b.newPage();
+    // Create a new page for the login process using a headless browser.
+    const page = await b.newPage();
+    try {
+        // Check if credentials for the 'url' are already stored in the 'loginCache'.
+        if (loginCache.has(url)) {
+            // Update the 'isBusy' flag and close the existing page, if it exists.
             loginCache.set(url, {
-                page: page,
-                username: username,
-                password: password,
+                ...loginCache.get(url),
                 isBusy: true
             });
-
-            loginCache.get(url).isBusy = true;
-            await login(page, url, username, password);
-            loginCache.get(url).isBusy = false;
-
-            res.status(200).json({ message: 'login success to url ' + url });
+            loginCache.get(url).page?.close();
         }
+
+        // Store the page, username, password, and 'isBusy' flag in the 'loginCache'.
+        loginCache.set(url, {
+            page: page,
+            username: username,
+            password: password,
+            isBusy: true
+        });
+
+        // Perform the login operation using the 'page', 'url', 'username', and 'password'.
+        let result = await login(page, url, username, password, false);
+
+        // Send a response with a 200 status if the login was successful, or a 400 status if it failed.
+        res.status(result.status ? 200 : 400).json({ message: result.message });
     } catch (ex) {
+        // Handle any exceptions that may occur during the login process and log an error.
         errorAsync(ex.message);
-        res.status(400).json({ message: 'login unsuccess to ' + url });
+        // Send a response with a 500 status to indicate an internal server error.
+        res.status(500).json({ message: 'Login unsuccessful to ' + url });
+    } finally {
+        // Set the 'isBusy' flag to indicate that the login process is complete.
+        loginCache.get(url).isBusy = false;
     }
 });
 
@@ -144,7 +176,11 @@ app.post('/register', async (req, res) => {
 
     try {
         const result = await register(page, url, username);
-        res.status(result.success ? 200 : 300).json({ message: result.message });
+        res.status(result.success ? 200 : 400).json({
+            message: result.message,
+            username: result.username,
+            defaultPassword: (result.success === true) ? result.password : ''
+        });
     } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
         errorAsync(`request responded with error: ${error.message}`);

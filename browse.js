@@ -1,29 +1,54 @@
 const { defaultPassword } = require('./constant');
 const { infoAsync, errorAsync } = require('./apputils');
 
+const TINY = 3000;
 const LOW = 60000;
 const MEDIUM = 90000;
 const HIGH = 120000;
 
+async function isLoggedIn(page) {
+    let url = await page.url();
+    return !url
+        .toLowerCase()
+        .includes('login');
+}
+
 async function login(page, url, username, password, logginAgain) {
-    await page.goto(url, { timeout: HIGH });
+    try {
+        await page.goto(url, { timeout: HIGH });
 
-    await page.waitForXPath('/html/body/div[1]/div/div/div[2]/div/form/div[1]/input')
-        .then(
-            await page.type('#username', username),
-            await page.type('#password', password)
-        );
+        await page.waitForXPath('/html/body/div[1]/div/div/div[2]/div/form/div[1]/input')
+            .then(
+                await page.type('#username', username),
+                await page.type('#password', password)
+            );
 
 
-    await page.click('#login-form > div:nth-child(5) > button');
-    await page.waitForFunction(() => !!document.querySelector('body > h6'), { timeout: HIGH });
+        await page.click('#login-form > div:nth-child(5) > button');
 
-    if (!logginAgain)
-        await page.on('dialog', dialog => {
-            dialog.accept();
-        });
+        let status = await page.waitForFunction(() => !!document.querySelector('#uname-error'), { timeout: TINY })
+            .catch(error => { });
+        if (status)
+            return {
+                status: false,
+                message: 'credentials error'
+            };
 
-    infoAsync(`login successful, url: ${url}`);
+        await page.waitForFunction(() => !!document.querySelector('body > h6'), { timeout: HIGH });
+
+        if (!logginAgain)
+            await page.on('dialog', dialog => {
+                dialog.accept();
+            });
+
+        infoAsync(`login successful, url: ${url}`);
+        return {
+            status: true,
+            message: `login successful, url: ${url}`
+        };
+    } catch (error) {
+        throw error;
+    }
 }
 
 async function searchUser(page, url, username) {
@@ -67,12 +92,14 @@ async function register(page, url, username) {
 
         await page.waitForFunction(`!!document.querySelector('body > main > div:nth-child(1) > div > ul > li')`)
         let element = await page.$('body > main > div:nth-child(1) > div > ul > li');
-        let value = await page.evaluate(el => el.textContent, element);
+        let value = await page.evaluate(el => el.innerText.toLowerCase(), element);
 
-        if (value.includes('taken') || value.includes('already') || value.includes('exists'))
-            return { success: false, message: value };
-
-        return { success: true, message: value.trim() };
+        return {
+            success: !(value.includes('taken') || value.includes('already') || value.includes('exists')),
+            message: value,
+            username: username,
+            password: defaultPassword
+        };
     } catch (error) {
         errorAsync(error.message);
         throw new Error(error.message);
@@ -89,9 +116,9 @@ async function resetPass(page, url, username) {
 
         await page.waitForFunction(() => !!document.querySelector('body > main > div:nth-child(1) > div > ul > li'));
         let element = await page.$('body > main > div:nth-child(1) > div > ul > li');
-        let value = await page.evaluate(el => el.textContent, element);
+        let value = await page.evaluate(el => el.innerText.toLowerCase(), element);
 
-        return { success: true, message: value.trim() };
+        return { success: true, message: value };
     } catch (error) {
         errorAsync(error.message);
         return { success: false, error: error.message };
@@ -138,10 +165,10 @@ async function deposit(page, url, username, amount) {
 
         await page.waitForFunction(() => !!document.querySelector('body > main > div:nth-child(1) > div > ul > li'));
         let element = await page.$('body > main > div:nth-child(1) > div > ul > li');
-        let value = await page.evaluate(el => el.textContent, element);
+        let value = await page.evaluate(el => el.innerText.toLowerCase(), element);
 
         return {
-            success: !value.includes('Insufficient'),
+            success: !value.includes('insufficient') && !value.includes('not'),
             message: value.trim()
         };
     } catch (error) {
@@ -162,10 +189,10 @@ async function withdraw(page, url, username, amount) {
 
         await page.waitForFunction(() => !!document.querySelector('body > main > div:nth-child(1) > div > ul > li'));
         let element = await page.$('body > main > div:nth-child(1) > div > ul > li');
-        let value = await page.evaluate(el => el.textContent, element);
+        let value = await page.evaluate(el => el.innerText.toLowerCase(), element);
 
         return {
-            success: !value.includes('Insufficient'),
+            success: !value.includes('insufficient') && !value.includes('not'),
             message: value.trim()
         };
     } catch (error) {
@@ -179,5 +206,6 @@ module.exports = {
     lockUser: lockUser,
     deposit: deposit,
     withdraw: withdraw,
-    resetPass: resetPass
+    resetPass: resetPass,
+    isLoggedIn: isLoggedIn
 }
