@@ -61,16 +61,17 @@ app.use(async (req, res, next) => {
                 return;
             }
 
-            if (!isLoggedIn(loginCache.get(url).page)) {
+            if (loginCache.get(url).page.url().toLowerCase().includes('login')) {
                 loginCache.get(url).isBusy = true;
                 let { page, username, password } = loginCache.get(url);
                 let result = await login(page, url, username, password, true);
 
-                if (result.status)
+                if (!result.status) {
                     res.status(400).json({ message: result.message });
+                    return;
+                }
 
                 loginCache.get(url).isBusy = false;
-                return;
             }
         }
 

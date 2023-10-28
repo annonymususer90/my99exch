@@ -9,7 +9,7 @@ const HIGH = 120000;
 async function isLoggedIn(page) {
     let flag = await page.url()
         .toLowerCase()
-        .includes('login');;
+        .includes('login');
     return !flag;
 }
 
