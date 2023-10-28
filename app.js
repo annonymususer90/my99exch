@@ -35,7 +35,7 @@ puppeteer.launch({
         process.env.NODE_ENV === "production"
             ? process.env.PUPPETEER_EXECUTABLE_PATH
             : puppeteer.executablePath(),
-    headless: true,
+    headless: false,
     timeout: 120000,
     defaultViewport: {
         width: 1366,
@@ -127,7 +127,12 @@ app.post('/login', async (req, res) => {
     if (
         loginCache.has(url) &&
         loginCache.get(url).page &&
-        isLoggedIn(loginCache.get(url).page)
+        !await loginCache
+            .get(url)
+            .page
+            .url()
+            .toLowerCase()
+            .includes('login')
     ) {
         // If a user is already logged in, send a response indicating an admin is logged in.
         return res.status(200).send('Admin is already logged in');

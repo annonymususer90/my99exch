@@ -7,10 +7,10 @@ const MEDIUM = 90000;
 const HIGH = 120000;
 
 async function isLoggedIn(page) {
-    let url = await page.url();
-    return !url
+    let flag = await page.url()
         .toLowerCase()
-        .includes('login');
+        .includes('login');;
+    return !flag;
 }
 
 async function login(page, url, username, password, logginAgain) {
